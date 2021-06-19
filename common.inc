@@ -1,0 +1,49 @@
+.setcpu "6502"
+
+PPU_CTRL   := $2000
+PPU_MASK   := $2001
+PPU_STATUS := $2002
+
+PPU_CTRL_NMI_ENABLE = 1 << 7
+
+APU_SQ1    := $4000
+APU_SQ2    := $4004
+APU_TRI    := $4008
+APU_NOI    := $400C
+APU_DMC    := $4010
+APU_STATUS := $4015
+APU_FRAME  := $4017
+
+APU_SQ_VOLUME_CONSTANT_FLAG = 1 << 4
+.define APU_SQ_VOLUME_ENVELOPE(v) (v)
+.define APU_SQ_VOLUME_CONSTANT(v) (APU_SQ_VOLUME_CONSTANT_FLAG | v)
+
+APU_SQ_LENGTH_COUNTER_HALT = 1 << 5
+APU_SQ_ENVELOPE_LOOP       = 1 << 5
+
+APU_SQ_DUTY_EIGHTH      = %00 << 6
+APU_SQ_DUTY_QUARTER     = %01 << 6
+APU_SQ_DUTY_HALF        = %10 << 6
+APU_SQ_DUTY_QUARTER_NEG = %11 << 6
+
+.define APU_SQ_LENGTH_COUNTER_LOAD(l) (l << 3)
+
+APU_STATUS_SQ1 = 1 << 0
+APU_STATUS_SQ2 = 1 << 1
+APU_STATUS_TRI = 1 << 2
+APU_STATUS_NOI = 1 << 3
+
+APU_FRAME_IRQ_DISABLE_FLAG = 1 << 6
+APU_FRAME_STEP5_FLAG       = 1 << 7
+APU_FRAME_STEP4          = APU_FRAME_IRQ_DISABLE_FLAG
+APU_FRAME_STEP4_WITH_IRQ = 0
+APU_FRAME_STEP5          = APU_FRAME_STEP5_FLAG
+
+.segment "INES"
+        .byte   "NES", $1A
+        .byte   1       ; PRG count
+        .byte   0       ; CHR count
+        .byte   0       ; horizontal mirror, mapper 0
+
+.segment "VECTORS"
+        .addr   NMI, RESET, IRQ
