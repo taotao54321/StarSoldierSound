@@ -25,11 +25,26 @@ RESET: ; {{{
         sta     PPU_MASK        ; 描画無効
         sta     APU_DMC         ; DMC IRQ 無効
 
+        ldx     #60
+        jsr     WaitVblanks
+
         jsr     InitSound
         jsr     EnableNMI
 
 @loop:
         jmp     @loop
+; }}}
+
+;;; VBLANK を X 回待つ。
+WaitVblanks: ; {{{
+        bit     PPU_STATUS
+@loop:
+        bit     PPU_STATUS
+        bpl     @loop
+        dex
+        bne     @loop
+
+        rts
 ; }}}
 
 InitSound: ; {{{
@@ -47,14 +62,6 @@ InitSound: ; {{{
 ; }}}
 
 EnableNMI: ; {{{
-        bit     PPU_STATUS
-@wait_vblank_1:
-        bit     PPU_STATUS
-        bpl     @wait_vblank_1
-@wait_vblank_2:
-        bit     PPU_STATUS
-        bpl     @wait_vblank_2
-
         lda     #PPU_CTRL_NMI_ENABLE
         sta     PPU_CTRL
 
