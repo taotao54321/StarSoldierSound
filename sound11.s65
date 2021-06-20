@@ -1,0 +1,159 @@
+; スターソルジャー 効果音 パワーアップ (ID:11)
+
+.include "common.inc"
+
+;---------------------------------------------------------------------
+.segment "ZP" : zeropage
+;---------------------------------------------------------------------
+
+sound_started: .res 1
+sound_stopped: .res 1
+
+timer1: .res 1
+timer2: .res 1
+
+;---------------------------------------------------------------------
+.segment "CODE"
+;---------------------------------------------------------------------
+
+RESET: ; {{{
+        sei
+        cld
+
+        ldx     #$FF
+        txs
+
+        lda     #0
+        sta     PPU_CTRL        ; NMI 無効
+        sta     PPU_MASK        ; 描画無効
+        sta     APU_DMC         ; DMC IRQ 無効
+
+        ldx     #60
+        jsr     WaitVblanks
+
+        jsr     InitSound
+        jsr     EnableNMI
+
+@loop:
+        jmp     @loop
+; }}}
+
+;;; VBLANK を X 回待つ。
+WaitVblanks: ; {{{
+        bit     PPU_STATUS
+@loop:
+        bit     PPU_STATUS
+        bpl     @loop
+        dex
+        bne     @loop
+
+        rts
+; }}}
+
+InitSound: ; {{{
+        lda     #APU_FRAME_STEP4
+        sta     APU_FRAME
+
+        lda     #APU_STATUS_SQ1 | APU_STATUS_SQ2 | APU_STATUS_TRI | APU_STATUS_NOI
+        sta     APU_STATUS
+
+        lda     #0
+        sta     sound_started
+        sta     sound_stopped
+
+        rts
+; }}}
+
+EnableNMI: ; {{{
+        lda     #PPU_CTRL_NMI_ENABLE
+        sta     PPU_CTRL
+
+        rts
+; }}}
+
+NMI: ; {{{
+        pha
+        txa
+        pha
+        tya
+        pha
+
+        jsr     SoundTick
+
+        pla
+        tay
+        pla
+        tax
+        pla
+
+        rti
+; }}}
+
+SoundTick: ; {{{
+        lda     sound_stopped
+        beq     @tick
+        rts
+
+@tick:
+        lda     sound_started
+        bne     @update_sound
+
+@start_sound:
+        lda     #1
+        sta     sound_started
+        jmp     SoundStart
+
+@update_sound:
+        jmp     SoundUpdate
+; }}}
+
+SoundStop: ; {{{
+        lda     #1
+        sta     sound_stopped
+
+        rts
+; }}}
+
+SoundStart: ; {{{
+        lda     #APU_SQ_VOLUME_ENVELOPE(13) | APU_SQ_DUTY_HALF
+        sta     APU_SQ2
+        lda     #0
+        sta     APU_SQ2+1
+        lda     #APU_SQ_LENGTH_COUNTER_LOAD(1)
+        sta     APU_SQ2+3
+
+        lda     #12
+        sta     timer2
+
+        jmp     Go
+; }}}
+
+SoundUpdate: ; {{{
+        dec     timer1
+        beq     @tick1
+        rts
+
+@tick1:
+        dec     timer2
+        beq     SoundStop
+
+        jmp     Go
+; }}}
+
+Go: ; {{{
+        lda     #4
+        sta     timer1
+
+        ; 周波数タイマー値: 54 + timer%2
+        lda     timer2
+        and     #1
+        clc
+        adc     #54
+        sta     APU_SQ2+2
+
+        rts
+; }}}
+
+IRQ: ; {{{
+        .byte   $02     ; kil
+; }}}
