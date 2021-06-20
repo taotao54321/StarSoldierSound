@@ -1,0 +1,185 @@
+; スターソルジャー 効果音 エクステンド (ID:6)
+
+.include "common.inc"
+
+;---------------------------------------------------------------------
+.segment "ZP" : zeropage
+;---------------------------------------------------------------------
+
+sound_started: .res 1
+sound_stopped: .res 1
+
+timer: .res 1
+note_idx: .res 1
+
+;---------------------------------------------------------------------
+.segment "CODE"
+;---------------------------------------------------------------------
+
+RESET: ; {{{
+        sei
+        cld
+
+        ldx     #$FF
+        txs
+
+        lda     #0
+        sta     PPU_CTRL        ; NMI 無効
+        sta     PPU_MASK        ; 描画無効
+        sta     APU_DMC         ; DMC IRQ 無効
+
+        ldx     #60
+        jsr     WaitVblanks
+
+        jsr     InitSound
+        jsr     EnableNMI
+
+@loop:
+        jmp     @loop
+; }}}
+
+;;; VBLANK を X 回待つ。
+WaitVblanks: ; {{{
+        bit     PPU_STATUS
+@loop:
+        bit     PPU_STATUS
+        bpl     @loop
+        dex
+        bne     @loop
+
+        rts
+; }}}
+
+InitSound: ; {{{
+        lda     #APU_FRAME_STEP4
+        sta     APU_FRAME
+
+        lda     #APU_STATUS_SQ1 | APU_STATUS_SQ2 | APU_STATUS_TRI | APU_STATUS_NOI
+        sta     APU_STATUS
+
+        lda     #0
+        sta     sound_started
+        sta     sound_stopped
+
+        rts
+; }}}
+
+EnableNMI: ; {{{
+        lda     #PPU_CTRL_NMI_ENABLE
+        sta     PPU_CTRL
+
+        rts
+; }}}
+
+NMI: ; {{{
+        pha
+        txa
+        pha
+        tya
+        pha
+
+        jsr     SoundTick
+
+        pla
+        tay
+        pla
+        tax
+        pla
+
+        rti
+; }}}
+
+SoundTick: ; {{{
+        lda     sound_stopped
+        beq     @tick
+        rts
+
+@tick:
+        lda     sound_started
+        bne     @update_sound
+
+@start_sound:
+        lda     #1
+        sta     sound_started
+        jmp     SoundStart
+
+@update_sound:
+        jmp     SoundUpdate
+; }}}
+
+SoundStop: ; {{{
+        lda     #1
+        sta     sound_stopped
+
+        rts
+; }}}
+
+SoundStart: ; {{{
+        lda     #APU_SQ_VOLUME_ENVELOPE(12) | APU_SQ_DUTY_HALF
+        sta     APU_SQ1
+        lda     #0
+        sta     APU_SQ1+1
+
+        lda     #APU_SQ_VOLUME_ENVELOPE(12) | APU_SQ_DUTY_HALF
+        sta     APU_SQ2
+        lda     #0
+        sta     APU_SQ2+1
+
+        lda     #1
+        sta     timer
+        lda     #8
+        sta     note_idx
+
+        jmp     SoundUpdate
+; }}}
+
+SoundUpdate: ; {{{
+        dec     timer
+        beq     @go
+        rts
+
+@go:
+        lda     #6
+        sta     timer
+
+        dec     note_idx
+        bpl     @play
+
+        lda     note_idx
+        cmp     #I8 -4
+        beq     SoundStop
+        rts
+
+@play:
+        ldx     note_idx
+        lda     PERIODS,x
+        sta     APU_SQ2+2
+
+        ; 周波数タイマー値を 1.5 倍すると、ほぼ半音7個下の音になる
+        ; (pow(2, 7/12) ~ 1.5)
+        lsr
+        clc
+        adc     PERIODS,x
+        sta     APU_SQ1+2
+
+        lda     #APU_SQ_LENGTH_COUNTER_LOAD(1)
+        sta     APU_SQ1+3
+        sta     APU_SQ2+3
+
+        rts
+; }}}
+
+PERIODS: ; {{{
+        .byte   50      ; C#7
+        .byte   67      ; G#6
+        .byte   80      ; F6
+        .byte   100     ; C#6
+        .byte   50      ; C#7
+        .byte   67      ; G#6
+        .byte   80      ; F6
+        .byte   100     ; C#6
+; }}}
+
+IRQ: ; {{{
+        .byte   $02     ; kil
+; }}}

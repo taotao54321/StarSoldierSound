@@ -1,5 +1,7 @@
 .setcpu "6502"
 
+.define I8(value) <(value)
+
 PPU_CTRL   := $2000
 PPU_MASK   := $2001
 PPU_STATUS := $2002
